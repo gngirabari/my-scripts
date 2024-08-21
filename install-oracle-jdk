@@ -1,0 +1,49 @@
+#!/bin/bash
+### This script can only be used to download Oracle JDKs that are still under the Oracle No-Fee Terms and Conditions
+# Extract the leftmost value, from argument 1 (Java version), before the first dot or assign the whole value if no dot exists.
+VERSION=${1%%.*}
+# Default to 21 if VERSION is empty
+if [ -z "${VERSION}" ]; then
+  VERSION=21
+fi
+
+# Set the download directory and download link
+DOWNLOAD_DIR="${HOME}/Downloads/Compressed/Java"
+DOWNLOAD_LINK="https://download.oracle.com/java/${VERSION}/latest/jdk-${VERSION}_linux-x64_bin.tar.gz"
+FILE_NAME=${DOWNLOAD_DIR}/$(basename "${DOWNLOAD_LINK}")
+
+# Rename the file if it already exists under DOWNLOAD_DIR.
+if [ -f "${FILE_NAME}" ]; then
+  # Get the current timestamp in the format YYYYMMDD_HHMMSS
+  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+  # Create the new file name by appending the timestamp
+  NEW_FILE="${FILE_NAME%.tar.gz}_${TIMESTAMP}.tar.gz"
+  # Rename the file
+  mv "${FILE_NAME}" "${NEW_FILE}"
+  echo "Existing ${FILE_NAME} is renamed to ${NEW_FILE}"
+fi
+
+# Download Oracle JDK to DOWNLOAD_DIR
+wget --tries=0 --directory-prefix="${DOWNLOAD_DIR}" "${DOWNLOAD_LINK}"
+
+# Extract the JDK and move it to the installation directory
+TEMP_DIR=$(mktemp -d)
+INSTALLATION_DIR=/usr/lib/jvm/jdk-${VERSION}-oracle-x64
+sudo tar --overwrite --directory="${TEMP_DIR}" -zxvf "${FILE_NAME}"
+sudo cp -rf "${TEMP_DIR}"/jdk*/. "${INSTALLATION_DIR}"
+sudo rm -rf "${TEMP_DIR}"
+
+# Update Java alternatives
+PRIORITY=$(date +%s)
+for jdk_cmd_path in "${INSTALLATION_DIR}"/bin/*
+do
+  if [ -x "${jdk_cmd_path}" ]
+  then
+    jdk_cmd=$(basename "${jdk_cmd_path}")
+    sudo update-alternatives --install /usr/bin/"${jdk_cmd}" "${jdk_cmd}" "${jdk_cmd_path}" "${PRIORITY}"
+    sudo update-alternatives --set "${jdk_cmd}" "${jdk_cmd_path}"
+  fi
+done
+
+sudo update-alternatives --install /usr/bin/jexec jexec "${INSTALLATION_DIR}"/lib/jexec "${PRIORITY}"
+sudo update-alternatives --set jexec "${INSTALLATION_DIR}"/lib/jexec
